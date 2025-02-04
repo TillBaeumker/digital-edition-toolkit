@@ -1,4 +1,4 @@
 streamlit
 playwright
-auto-playwright
+openai
 python-dotenv
