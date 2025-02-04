@@ -5,17 +5,13 @@ import os
 from dotenv import load_dotenv
 import validators
 
-# Sicherstellen, dass Playwright-Browser installiert sind
-os.system("playwright install")
-os.system("playwright install-deps")
-
 # Lade Umgebungsvariablen
 load_dotenv()
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", st.secrets.get("OPENAI_API_KEY", None))
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
 
 # Prüfe, ob der OpenAI API-Key vorhanden ist
 if not OPENAI_API_KEY:
-    st.error("⚠️ OpenAI API-Key fehlt! Bitte stelle sicher, dass ein API-Key in `.env` oder `st.secrets` hinterlegt ist.")
+    st.error("⚠️ OpenAI API-Key fehlt! Bitte in `.env` oder `st.secrets.toml` hinterlegen.")
     st.stop()
 
 openai.api_key = OPENAI_API_KEY
@@ -42,33 +38,43 @@ if st.button("🚀 Test starten"):
 
     with sync_playwright() as p:
         try:
-            browser = p.chromium.launch(headless=True)  # Headless für Cloud
+            browser = p.chromium.launch(headless=True)  # Headless für Streamlit Cloud
             page = browser.new_page()
-            page.goto(url, timeout=10000)  # Timeout für langsam ladende Seiten
+
+            # Lade die Seite mit optimierten Einstellungen für schnelleres Laden
+            page.goto(url, timeout=15000, wait_until="domcontentloaded")
 
             # OpenAI generiert eine Testanweisung basierend auf der Testbeschreibung
-            response = openai.ChatCompletion.create(
-                model="gpt-4-turbo",
-                messages=[
-                    {"role": "system", "content": "Du bist ein Web-Testing-Assistent."},
-                    {"role": "user", "content": f"Teste diese Website: {url}. {test_prompt}"}
-                ],
-                max_tokens=150
-            )
-            test_instruction = response["choices"][0]["message"]["content"]
+            try:
+                response = openai.ChatCompletion.create(
+                    model="gpt-4-turbo",
+                    messages=[
+                        {"role": "system", "content": "Du bist ein Web-Testing-Assistent."},
+                        {"role": "user", "content": f"Teste diese Website: {url}. {test_prompt}"}
+                    ],
+                    max_tokens=200
+                )
+                test_instruction = response["choices"][0]["message"]["content"]
+            except Exception as e:
+                test_instruction = f"⚠️ Fehler bei OpenAI: {str(e)}"
+            
             st.subheader("🔎 Generierte Testanweisung:")
             st.write(test_instruction)
 
             # Sammle alle Links auf der Seite
             links = page.locator("a").all()
             link_list = [link.get_attribute("href") for link in links if link.get_attribute("href")]
-            st.subheader(f"🔗 Gefundene Links ({len(link_list)}):")
-            st.write(link_list[:10])  # Zeigt die ersten 10 Links zur Übersicht
 
-            browser.close()
-            st.success("✅ Test abgeschlossen!")
+            st.subheader(f"🔗 Gefundene Links ({len(link_list)}):")
+            if len(link_list) > 0:
+                st.write(link_list[:10])  # Zeigt die ersten 10 Links zur Übersicht
+            else:
+                st.write("❌ Keine Links gefunden.")
 
         except TimeoutError:
             st.error("⏳ Fehler: Die Website hat zu lange zum Laden gebraucht.")
         except Exception as e:
             st.error(f"⚠️ Unerwarteter Fehler: {str(e)}")
+        finally:
+            browser.close()
+            st.success("✅ Test abgeschlossen!")
