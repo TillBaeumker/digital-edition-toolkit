@@ -4,6 +4,10 @@ import openai
 import os
 from dotenv import load_dotenv
 
+os.system("playwright install")
+
+
+
 # Lade API-Keys aus Streamlit Secrets oder .env-Datei
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") or st.secrets["OPENAI_API_KEY"]
