@@ -14,7 +14,8 @@ if not OPENAI_API_KEY:
     st.error("⚠️ OpenAI API-Key fehlt! Bitte in `.env` oder `st.secrets.toml` hinterlegen.")
     st.stop()
 
-openai.api_key = OPENAI_API_KEY
+# OpenAI Client
+client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 # Titel der App
 st.title("🔍 Digital Edition Tester")
@@ -37,6 +38,7 @@ if st.button("🚀 Test starten"):
     st.info(f"🔄 Starte Tests für {url} ...")
 
     with sync_playwright() as p:
+        browser = None  # Initialisierung, um sicherzustellen, dass `browser.close()` in jedem Fall aufgerufen wird
         try:
             browser = p.chromium.launch(headless=True)  # Headless für Streamlit Cloud
             page = browser.new_page()
@@ -46,7 +48,7 @@ if st.button("🚀 Test starten"):
 
             # OpenAI generiert eine Testanweisung basierend auf der Testbeschreibung
             try:
-                response = openai.ChatCompletion.create(
+                response = client.chat.completions.create(
                     model="gpt-4-turbo",
                     messages=[
                         {"role": "system", "content": "Du bist ein Web-Testing-Assistent."},
@@ -54,7 +56,7 @@ if st.button("🚀 Test starten"):
                     ],
                     max_tokens=200
                 )
-                test_instruction = response["choices"][0]["message"]["content"]
+                test_instruction = response.choices[0].message.content
             except Exception as e:
                 test_instruction = f"⚠️ Fehler bei OpenAI: {str(e)}"
             
@@ -63,7 +65,7 @@ if st.button("🚀 Test starten"):
 
             # Sammle alle Links auf der Seite
             links = page.locator("a").all()
-            link_list = [link.get_attribute("href") for link in links if link.get_attribute("href")]
+            link_list = [link.get_attribute("href") for link in links if link.get_attribute("href") and link.get_attribute("href").startswith(("http", "www"))]
 
             st.subheader(f"🔗 Gefundene Links ({len(link_list)}):")
             if len(link_list) > 0:
@@ -76,5 +78,6 @@ if st.button("🚀 Test starten"):
         except Exception as e:
             st.error(f"⚠️ Unerwarteter Fehler: {str(e)}")
         finally:
-            browser.close()
+            if browser:
+                browser.close()
             st.success("✅ Test abgeschlossen!")
