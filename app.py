@@ -4,6 +4,7 @@ import openai
 import os
 from dotenv import load_dotenv
 import validators
+from auto_playwright import auto  # Auto Playwright für KI-generierte Playwright-Tests
 
 # Lade Umgebungsvariablen
 load_dotenv()
@@ -19,7 +20,7 @@ client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 # Titel der App
 st.title("🔍 Digital Edition Tester")
-st.write("Gib eine Website-URL ein und beschreibe, was getestet werden soll.")
+st.write("Gib eine Website-URL ein und eine Testanweisung in natürlicher Sprache.")
 
 # Eingabefelder
 url = st.text_input("🌍 Website-URL", "")
@@ -42,28 +43,33 @@ if st.button("🚀 Test starten"):
         try:
             browser = p.chromium.launch(headless=True)  # Headless für Streamlit Cloud
             page = browser.new_page()
-
-            # Lade die Seite mit optimierten Einstellungen für schnelleres Laden
             page.goto(url, timeout=15000, wait_until="domcontentloaded")
 
-            # OpenAI generiert eine Testanweisung basierend auf der Testbeschreibung
+            # 🔥 GPT-4 generiert eine Playwright-Testanweisung
             try:
                 response = client.chat.completions.create(
                     model="gpt-4-turbo",
                     messages=[
-                        {"role": "system", "content": "Du bist ein Web-Testing-Assistent."},
-                        {"role": "user", "content": f"Teste diese Website: {url}. {test_prompt}"}
+                        {"role": "system", "content": "Du bist ein Playwright-Testassistent."},
+                        {"role": "user", "content": f"Erstelle einen Playwright-Test für: {test_prompt}"}
                     ],
-                    max_tokens=200
+                    max_tokens=300
                 )
-                test_instruction = response.choices[0].message.content
+                playwright_command = response.choices[0].message.content
             except Exception as e:
-                test_instruction = f"⚠️ Fehler bei OpenAI: {str(e)}"
-            
-            st.subheader("🔎 Generierte Testanweisung:")
-            st.write(test_instruction)
+                playwright_command = f"⚠️ Fehler bei OpenAI: {str(e)}"
 
-            # Sammle alle Links auf der Seite
+            st.subheader("🔎 Generierte Playwright-Aktion:")
+            st.write(playwright_command)
+
+            # **🚀 Playwright automatisch ausführen mit `auto()`**
+            try:
+                auto(playwright_command, {"page": page})
+                st.success("✅ Test erfolgreich ausgeführt!")
+            except Exception as e:
+                st.error(f"⚠️ Fehler bei der Testausführung: {str(e)}")
+
+            # 🔗 Links auf der Seite sammeln
             links = page.locator("a").all()
             link_list = [link.get_attribute("href") for link in links if link.get_attribute("href") and link.get_attribute("href").startswith(("http", "www"))]
 
