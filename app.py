@@ -5,9 +5,10 @@ import validators
 import subprocess
 from playwright.sync_api import sync_playwright
 
-# **Erforderliche Abhängigkeiten installieren**
-os.system("playwright install")
-os.system("playwright install-deps")
+# **Erforderliche Abhängigkeiten prüfen und installieren**
+if not os.path.exists("/home/adminuser/.cache/ms-playwright"):
+    os.system("playwright install")
+    os.system("playwright install-deps")
 
 # **OpenAI API-Schlüssel aus Streamlit Secrets laden**
 if "OPENAI_API_KEY" not in st.secrets:
@@ -18,7 +19,7 @@ OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 # **📌 Streamlit UI**
-st.title("🖥️ AI-gesteuerte End-to-End-Tests mit Playwright & Pytest")
+st.title("🖥️ KI-gesteuerte End-to-End-Tests mit Playwright & Pytest")
 st.write("Gib eine Website-URL ein und wähle die zu testenden Kriterien:")
 
 # **Eingabefelder**
@@ -28,22 +29,18 @@ test_prompt = st.text_area("📝 Beschreibung der gewünschten Tests (optional)"
 # **Checkboxen für spezifische Tests**
 st.subheader("🔍 Welche Aspekte sollen getestet werden?")
 test_options = {
-    "check_links": st.checkbox("🔗 Funktionalität der Links prüfen"),
-    "check_images": st.checkbox("🖼️ Bilder werden geladen"),
-    "check_search": st.checkbox("🔍 Funktioniert die Suchleiste?"),
-    "check_login": st.checkbox("🔑 Login-Funktion testen"),
-    "check_api": st.checkbox("🖥️ API & technische Schnittstellen prüfen"),
-    "check_metadata": st.checkbox("📄 Metadaten vorhanden & korrekt"),
+    "check_links": st.checkbox("🔗 Links prüfen"),
+    "check_images": st.checkbox("🖼️ Bildanzeige prüfen"),
+    "check_search": st.checkbox("🔍 Suchfunktion testen"),
+    "check_login": st.checkbox("🔑 Login testen"),
+    "check_api": st.checkbox("🖥️ API-Verfügbarkeit testen"),
+    "check_metadata": st.checkbox("📄 Metadaten überprüfen"),
 }
 
 # **Funktion zur Code-Bereinigung**
 def clean_generated_code(code):
     """Entfernt Markdown-Codeblöcke und gibt nur den reinen Python-Code zurück."""
-    if code.startswith("```python"):
-        code = code.replace("```python", "").strip()
-    if code.endswith("```"):
-        code = code.replace("```", "").strip()
-    return code
+    return code.replace("```python", "").replace("```", "").strip()
 
 # **Button zum Starten des Tests**
 if st.button("🚀 Test starten"):
@@ -71,9 +68,9 @@ if st.button("🚀 Test starten"):
             model="gpt-4-turbo",
             messages=[{
                 "role": "user",
-                "content": f"Schreibe einen vollständigen Playwright-Pytest-Test für die folgende Aufgabe: {test_prompt}. "
+                "content": f"Schreibe einen vollständigen Playwright-Pytest-Test für folgende Anforderungen: {test_prompt}. "
                            f"Die Tests sollen sich auf folgende Punkte beziehen: {', '.join(selected_tests)}. "
-                           "Gib nur den Python-Code zurück, ohne Erklärungen oder Markdown-Formatierung."
+                           "Gib NUR den Python-Code zurück, ohne Markdown oder Kommentare."
             }],
             max_tokens=800
         )
@@ -98,19 +95,19 @@ if st.button("🚀 Test starten"):
         try:
             result = subprocess.run(["pytest", test_file, "--disable-warnings"], capture_output=True, text=True)
             st.subheader("📊 Testergebnisse:")
-            st.text(result.stdout)  # Zeigt die Ergebnisse an
+            st.text(result.stdout)  # Zeigt die Testergebnisse an
 
             # **KI-Zusammenfassung der Ergebnisse**
             summary_response = client.chat.completions.create(
                 model="gpt-4-turbo",
                 messages=[{
                     "role": "user",
-                    "content": f"Erstelle eine verständliche, zusammenfassende Bewertung basierend auf diesen Testergebnissen:\n\n{result.stdout}"
+                    "content": f"Erstelle eine klare, prägnante Zusammenfassung der folgenden Testergebnisse:\n\n{result.stdout}"
                 }],
                 max_tokens=300
             )
             summary = summary_response.choices[0].message.content.strip()
-            st.subheader("📄 Zusammenfassung der Ergebnisse:")
+            st.subheader("📄 Zusammenfassung der Testergebnisse:")
             st.write(summary)
 
             if result.returncode == 0:
