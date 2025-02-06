@@ -25,6 +25,15 @@ st.write("Gib eine Testanweisung in natürlicher Sprache ein:")
 url = st.text_input("🌍 Website-URL", "")
 test_prompt = st.text_area("📝 Was soll getestet werden?", "")
 
+# **Funktion zur Code-Bereinigung**
+def clean_generated_code(code):
+    """Entfernt Markdown-Codeblöcke und gibt nur den reinen Python-Code zurück."""
+    if code.startswith("```python"):
+        code = code.replace("```python", "").strip()
+    if code.endswith("```"):
+        code = code.replace("```", "").strip()
+    return code
+
 # **Button zum Starten des Tests**
 if st.button("🚀 Test starten"):
     if not url or not test_prompt:
@@ -47,13 +56,14 @@ if st.button("🚀 Test starten"):
             model="gpt-4-turbo",
             messages=[{
                 "role": "user",
-                "content": f"Schreibe ein vollständiges Playwright-Pytest-Testskript für folgende Aufgabe: {test_prompt}. "
-                           "Gib nur reinen ausführbaren Python-Code zurück, ohne Erklärungen oder Kommentare."
+                "content": f"Schreibe einen vollständigen Playwright-Pytest-Test für folgende Aufgabe: {test_prompt}. "
+                           "Gib nur den Python-Code zurück, ohne Erklärungen oder Markdown-Formatierung."
             }],
             max_tokens=500
         )
 
         pytest_code = response.choices[0].message.content.strip()
+        pytest_code = clean_generated_code(pytest_code)  # Entferne Markdown-Formatierung
 
         # **Überprüfung auf gültigen Code**
         if "import" not in pytest_code or "def test_" not in pytest_code:
