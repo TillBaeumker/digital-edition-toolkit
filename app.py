@@ -28,11 +28,7 @@ test_prompt = st.text_area("📝 Was soll getestet werden?", "")
 # **Funktion zur Code-Bereinigung**
 def clean_generated_code(code):
     """Entfernt Markdown-Codeblöcke und gibt nur den reinen Python-Code zurück."""
-    if code.startswith("```python"):
-        code = code.replace("```python", "").strip()
-    if code.endswith("```"):
-        code = code.replace("```", "").strip()
-    return code
+    return code.replace("```python", "").replace("```", "").strip()
 
 # **Button zum Starten des Tests**
 if st.button("🚀 Test starten"):
@@ -70,7 +66,7 @@ if st.button("🚀 Test starten"):
             st.error("⚠️ OpenAI hat keinen gültigen Python-Testcode generiert. Versuche es mit einer präziseren Anweisung.")
             st.stop()
 
-        # **Generierten Code speichern**
+        # **Generierten Code in test_generated.py speichern**
         test_file = "test_generated.py"
         with open(test_file, "w") as f:
             f.write(pytest_code)
