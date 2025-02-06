@@ -19,28 +19,47 @@ client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 # **📌 Streamlit UI**
 st.title("🖥️ AI-gesteuerte End-to-End-Tests mit Playwright & Pytest")
-st.write("Gib eine Testanweisung in natürlicher Sprache ein:")
+st.write("Gib eine Website-URL ein und wähle die zu testenden Kriterien:")
 
 # **Eingabefelder**
 url = st.text_input("🌍 Website-URL", "")
-test_prompt = st.text_area("📝 Was soll getestet werden?", "")
+test_prompt = st.text_area("📝 Beschreibung der gewünschten Tests (optional)", "")
+
+# **Checkboxen für spezifische Tests**
+st.subheader("🔍 Welche Aspekte sollen getestet werden?")
+test_options = {
+    "check_links": st.checkbox("🔗 Funktionalität der Links prüfen"),
+    "check_images": st.checkbox("🖼️ Bilder werden geladen"),
+    "check_search": st.checkbox("🔍 Funktioniert die Suchleiste?"),
+    "check_login": st.checkbox("🔑 Login-Funktion testen"),
+    "check_api": st.checkbox("🖥️ API & technische Schnittstellen prüfen"),
+    "check_metadata": st.checkbox("📄 Metadaten vorhanden & korrekt"),
+}
 
 # **Funktion zur Code-Bereinigung**
 def clean_generated_code(code):
     """Entfernt Markdown-Codeblöcke und gibt nur den reinen Python-Code zurück."""
-    return code.replace("```python", "").replace("```", "").strip()
+    if code.startswith("```python"):
+        code = code.replace("```python", "").strip()
+    if code.endswith("```"):
+        code = code.replace("```", "").strip()
+    return code
 
 # **Button zum Starten des Tests**
 if st.button("🚀 Test starten"):
-    if not url or not test_prompt:
-        st.warning("⚠️ Bitte eine URL und eine Testbeschreibung eingeben.")
+    if not url:
+        st.warning("⚠️ Bitte eine URL eingeben.")
         st.stop()
-
     if not validators.url(url):
         st.error("🚫 Ungültige URL! Bitte eine gültige Webadresse eingeben.")
         st.stop()
 
     st.info(f"🔄 Starte Tests für {url} ...")
+
+    selected_tests = [key for key, value in test_options.items() if value]
+    if not selected_tests:
+        st.warning("⚠️ Bitte mindestens einen Test auswählen.")
+        st.stop()
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -52,10 +71,11 @@ if st.button("🚀 Test starten"):
             model="gpt-4-turbo",
             messages=[{
                 "role": "user",
-                "content": f"Schreibe einen vollständigen Playwright-Pytest-Test für folgende Aufgabe: {test_prompt}. "
+                "content": f"Schreibe einen vollständigen Playwright-Pytest-Test für die folgende Aufgabe: {test_prompt}. "
+                           f"Die Tests sollen sich auf folgende Punkte beziehen: {', '.join(selected_tests)}. "
                            "Gib nur den Python-Code zurück, ohne Erklärungen oder Markdown-Formatierung."
             }],
-            max_tokens=500
+            max_tokens=800
         )
 
         pytest_code = response.choices[0].message.content.strip()
@@ -66,7 +86,7 @@ if st.button("🚀 Test starten"):
             st.error("⚠️ OpenAI hat keinen gültigen Python-Testcode generiert. Versuche es mit einer präziseren Anweisung.")
             st.stop()
 
-        # **Generierten Code in test_generated.py speichern**
+        # **Generierten Code speichern**
         test_file = "test_generated.py"
         with open(test_file, "w") as f:
             f.write(pytest_code)
@@ -79,6 +99,19 @@ if st.button("🚀 Test starten"):
             result = subprocess.run(["pytest", test_file, "--disable-warnings"], capture_output=True, text=True)
             st.subheader("📊 Testergebnisse:")
             st.text(result.stdout)  # Zeigt die Ergebnisse an
+
+            # **KI-Zusammenfassung der Ergebnisse**
+            summary_response = client.chat.completions.create(
+                model="gpt-4-turbo",
+                messages=[{
+                    "role": "user",
+                    "content": f"Erstelle eine verständliche, zusammenfassende Bewertung basierend auf diesen Testergebnissen:\n\n{result.stdout}"
+                }],
+                max_tokens=300
+            )
+            summary = summary_response.choices[0].message.content.strip()
+            st.subheader("📄 Zusammenfassung der Ergebnisse:")
+            st.write(summary)
 
             if result.returncode == 0:
                 st.success("✅ Alle Tests erfolgreich bestanden!")
