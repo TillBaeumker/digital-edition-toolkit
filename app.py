@@ -24,23 +24,15 @@ st.write("Gib eine Website-URL ein und wähle die zu testenden Kriterien:")
 
 # **Eingabefelder**
 url = st.text_input("🌍 Website-URL", "")
-test_prompt = st.text_area("📝 Beschreibung der gewünschten Tests (optional)", "")
+st.write("🔍 Wähle die gewünschten Tests aus:")
 
-# **Checkboxen für spezifische Tests**
-st.subheader("🔍 Welche Aspekte sollen getestet werden?")
-test_options = {
-    "check_links": st.checkbox("🔗 Links prüfen"),
-    "check_images": st.checkbox("🖼️ Bildanzeige prüfen"),
-    "check_search": st.checkbox("🔍 Suchfunktion testen"),
-    "check_login": st.checkbox("🔑 Login testen"),
-    "check_api": st.checkbox("🖥️ API-Verfügbarkeit testen"),
-    "check_metadata": st.checkbox("📄 Metadaten überprüfen"),
-}
-
-# **Funktion zur Code-Bereinigung**
-def clean_generated_code(code):
-    """Entfernt Markdown-Codeblöcke und gibt nur den reinen Python-Code zurück."""
-    return code.replace("```python", "").replace("```", "").strip()
+# **Checkboxen für Tests**
+check_links = st.checkbox("🔗 Funktionalität der Links prüfen")
+check_images = st.checkbox("🖼️ Bilder geladen?")
+check_search = st.checkbox("🔍 Funktioniert die Suche?")
+check_login = st.checkbox("🔑 Login-Funktion testen?")
+check_api = st.checkbox("🖥️ API erreichbar?")
+check_metadata = st.checkbox("📄 Metadaten korrekt?")
 
 # **Button zum Starten des Tests**
 if st.button("🚀 Test starten"):
@@ -53,70 +45,96 @@ if st.button("🚀 Test starten"):
 
     st.info(f"🔄 Starte Tests für {url} ...")
 
-    selected_tests = [key for key, value in test_options.items() if value]
-    if not selected_tests:
-        st.warning("⚠️ Bitte mindestens einen Test auswählen.")
-        st.stop()
+    test_code = f"""
+import pytest
+from playwright.sync_api import sync_playwright
 
+@pytest.fixture(scope="function")
+def page():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
-        page.goto(url, timeout=15000, wait_until="domcontentloaded")
+        page.goto("{url}", timeout=15000, wait_until="domcontentloaded")
+        yield page
+        page.close()
+        browser.close()
+    """
 
-        # **GPT-4 generiert Playwright-Testcode für pytest**
-        response = client.chat.completions.create(
+    if check_links:
+        test_code += """
+def test_check_links(page):
+    links = page.locator("a").all()
+    assert len(links) > 0, "Es wurden keine Links gefunden."
+    """
+
+    if check_images:
+        test_code += """
+def test_check_images(page):
+    images = page.locator("img").all()
+    assert len(images) > 0, "Es wurden keine Bilder gefunden."
+    """
+
+    if check_search:
+        test_code += """
+def test_check_search(page):
+    search_box = page.locator("input[type='search'], input[name='q']")
+    assert search_box.count() > 0, "Keine Suchleiste gefunden."
+    """
+
+    if check_login:
+        test_code += """
+def test_check_login(page):
+    login_button = page.locator("button:has-text('Login'), input[type='submit']")
+    assert login_button.count() > 0, "Kein Login-Button gefunden."
+    """
+
+    if check_api:
+        test_code += """
+def test_check_api(page):
+    response = page.evaluate("() => fetch('/api').then(res => res.status)")
+    assert response == 200, "API nicht erreichbar oder Fehlercode zurückgegeben."
+    """
+
+    if check_metadata:
+        test_code += """
+def test_check_metadata(page):
+    meta_tags = page.locator("meta").all()
+    assert len(meta_tags) > 0, "Keine Metadaten gefunden."
+    """
+
+    # **Generierten Code speichern**
+    test_file = "test_generated.py"
+    with open(test_file, "w") as f:
+        f.write(test_code)
+
+    st.subheader("📌 Generierter Playwright + Pytest Code:")
+    st.code(test_code, language="python")
+
+    # **⚡ Pytest automatisch ausführen**
+    try:
+        result = subprocess.run(["pytest", test_file, "--disable-warnings"], capture_output=True, text=True)
+        st.subheader("📊 Testergebnisse:")
+        st.text(result.stdout)  # Zeigt die Ergebnisse an
+
+        # **KI-Zusammenfassung der Ergebnisse**
+        summary_response = client.chat.completions.create(
             model="gpt-4-turbo",
             messages=[{
                 "role": "user",
-                "content": f"Schreibe einen vollständigen Playwright-Pytest-Test für folgende Anforderungen: {test_prompt}. "
-                           f"Die Tests sollen sich auf folgende Punkte beziehen: {', '.join(selected_tests)}. "
-                           "Gib NUR den Python-Code zurück, ohne Markdown oder Kommentare."
+                "content": f"Erstelle eine verständliche, zusammenfassende Bewertung basierend auf diesen Testergebnissen:\n\n{result.stdout}"
             }],
-            max_tokens=800
+            max_tokens=300
         )
+        summary = summary_response.choices[0].message.content.strip()
+        st.subheader("📄 Zusammenfassung der Ergebnisse:")
+        st.write(summary)
 
-        pytest_code = response.choices[0].message.content.strip()
-        pytest_code = clean_generated_code(pytest_code)  # Entferne Markdown-Formatierung
+        if result.returncode == 0:
+            st.success("✅ Alle Tests erfolgreich bestanden!")
+        else:
+            st.error("❌ Einige Tests sind fehlgeschlagen. Siehe Logs oben.")
 
-        # **Überprüfung auf gültigen Code**
-        if "import" not in pytest_code or "def test_" not in pytest_code:
-            st.error("⚠️ OpenAI hat keinen gültigen Python-Testcode generiert. Versuche es mit einer präziseren Anweisung.")
-            st.stop()
+    except Exception as e:
+        st.error(f"⚠️ Fehler bei der Testausführung: {str(e)}")
 
-        # **Generierten Code speichern**
-        test_file = "test_generated.py"
-        with open(test_file, "w") as f:
-            f.write(pytest_code)
-
-        st.subheader("📌 Generierter Playwright + Pytest Code:")
-        st.code(pytest_code, language="python")
-
-        # **⚡ Pytest automatisch ausführen**
-        try:
-            result = subprocess.run(["pytest", test_file, "--disable-warnings"], capture_output=True, text=True)
-            st.subheader("📊 Testergebnisse:")
-            st.text(result.stdout)  # Zeigt die Testergebnisse an
-
-            # **KI-Zusammenfassung der Ergebnisse**
-            summary_response = client.chat.completions.create(
-                model="gpt-4-turbo",
-                messages=[{
-                    "role": "user",
-                    "content": f"Erstelle eine klare, prägnante Zusammenfassung der folgenden Testergebnisse:\n\n{result.stdout}"
-                }],
-                max_tokens=300
-            )
-            summary = summary_response.choices[0].message.content.strip()
-            st.subheader("📄 Zusammenfassung der Testergebnisse:")
-            st.write(summary)
-
-            if result.returncode == 0:
-                st.success("✅ Alle Tests erfolgreich bestanden!")
-            else:
-                st.error("❌ Einige Tests sind fehlgeschlagen. Siehe Logs oben.")
-
-        except Exception as e:
-            st.error(f"⚠️ Fehler bei der Testausführung: {str(e)}")
-
-        browser.close()
-        st.success("✅ Test abgeschlossen!")
+    st.success("✅ Test abgeschlossen!")
