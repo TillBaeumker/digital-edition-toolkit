@@ -12,7 +12,7 @@ if "OPENAI_API_KEY" not in st.secrets:
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
-# 🎯 **Streamlit UI**
+# **📌 Streamlit UI**
 st.title("🖥️ AI-gesteuerte End-to-End-Tests mit Playwright & Pytest")
 st.write("Gib eine Testanweisung in natürlicher Sprache ein:")
 
@@ -46,7 +46,8 @@ if st.button("🚀 Test starten"):
         pytest_code = response.choices[0].message.content
 
         # **Generierten Code speichern**
-        with open("test_generated.py", "w") as f:
+        test_file = "test_generated.py"
+        with open(test_file, "w") as f:
             f.write(pytest_code)
 
         st.subheader("📌 Generierter Playwright + Pytest Code:")
@@ -54,9 +55,15 @@ if st.button("🚀 Test starten"):
 
         # **⚡ Pytest automatisch ausführen**
         try:
-            result = subprocess.run(["pytest", "test_generated.py"], capture_output=True, text=True)
+            result = subprocess.run(["pytest", test_file, "--disable-warnings"], capture_output=True, text=True)
             st.subheader("📊 Testergebnisse:")
             st.text(result.stdout)  # Zeigt die Ergebnisse an
+
+            if result.returncode == 0:
+                st.success("✅ Alle Tests erfolgreich bestanden!")
+            else:
+                st.error("❌ Einige Tests sind fehlgeschlagen. Siehe Logs oben.")
+
         except Exception as e:
             st.error(f"⚠️ Fehler bei der Testausführung: {str(e)}")
 
