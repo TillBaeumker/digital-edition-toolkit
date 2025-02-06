@@ -45,10 +45,20 @@ if st.button("🚀 Test starten"):
         # **GPT-4 generiert Playwright-Testcode für pytest**
         response = client.chat.completions.create(
             model="gpt-4-turbo",
-            messages=[{"role": "user", "content": f"Erstelle einen Playwright-Test mit pytest für: {test_prompt}"}],
+            messages=[{
+                "role": "user",
+                "content": f"Schreibe ein vollständiges Playwright-Pytest-Testskript für folgende Aufgabe: {test_prompt}. "
+                           "Gib nur reinen ausführbaren Python-Code zurück, ohne Erklärungen oder Kommentare."
+            }],
             max_tokens=500
         )
-        pytest_code = response.choices[0].message.content
+
+        pytest_code = response.choices[0].message.content.strip()
+
+        # **Überprüfung auf gültigen Code**
+        if "import" not in pytest_code or "def test_" not in pytest_code:
+            st.error("⚠️ OpenAI hat keinen gültigen Python-Testcode generiert. Versuche es mit einer präziseren Anweisung.")
+            st.stop()
 
         # **Generierten Code speichern**
         test_file = "test_generated.py"
