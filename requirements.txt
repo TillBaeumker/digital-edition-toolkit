@@ -1,7 +1,7 @@
 streamlit
 openai
 playwright
+pytest
 pytest-playwright
 python-dotenv
-Falls du auto-playwright verwendest, füge es hinzu:
 auto-playwright
