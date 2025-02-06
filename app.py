@@ -1,14 +1,15 @@
 import os
-os.system("playwright install")
-os.system("playwright install-deps")
-
 import streamlit as st
 import openai
 import validators
 import subprocess
 from playwright.sync_api import sync_playwright
 
-# **🔑 OpenAI API-Schlüssel aus Streamlit Secrets laden**
+# **Erforderliche Abhängigkeiten installieren**
+os.system("playwright install")
+os.system("playwright install-deps")
+
+# **OpenAI API-Schlüssel aus Streamlit Secrets laden**
 if "OPENAI_API_KEY" not in st.secrets:
     st.error("⚠️ OpenAI API-Key fehlt! Bitte in `st.secrets.toml` hinterlegen.")
     st.stop()
@@ -41,17 +42,13 @@ if st.button("🚀 Test starten"):
         page = browser.new_page()
         page.goto(url, timeout=15000, wait_until="domcontentloaded")
 
-        # 🔥 **GPT-4 generiert Playwright-Testcode für pytest**
-        try:
-            response = client.chat.completions.create(
-                model="gpt-4-turbo",
-                messages=[{"role": "user", "content": f"Erstelle einen Playwright-Test mit pytest für: {test_prompt}"}],
-                max_tokens=500
-            )
-            pytest_code = response.choices[0].message.content
-        except Exception as e:
-            st.error(f"⚠️ Fehler bei der Kommunikation mit OpenAI: {str(e)}")
-            pytest_code = ""
+        # **GPT-4 generiert Playwright-Testcode für pytest**
+        response = client.chat.completions.create(
+            model="gpt-4-turbo",
+            messages=[{"role": "user", "content": f"Erstelle einen Playwright-Test mit pytest für: {test_prompt}"}],
+            max_tokens=500
+        )
+        pytest_code = response.choices[0].message.content
 
         # **Generierten Code speichern**
         test_file = "test_generated.py"
