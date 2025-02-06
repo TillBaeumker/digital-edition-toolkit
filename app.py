@@ -1,3 +1,7 @@
+import os
+os.system("playwright install")
+os.system("playwright install-deps")
+
 import streamlit as st
 import openai
 import validators
