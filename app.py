@@ -5,11 +5,11 @@ import validators
 import subprocess
 from playwright.sync_api import sync_playwright
 
-# **Erforderliche Abhängigkeiten installieren**
+# 🔧 **Automatische Installation der Abhängigkeiten**
 os.system("playwright install")
 os.system("playwright install-deps")
 
-# **OpenAI API-Schlüssel**
+# 📌 **OpenAI API-Schlüssel aus Streamlit Secrets laden**
 if "OPENAI_API_KEY" not in st.secrets:
     st.error("⚠️ OpenAI API-Key fehlt! Bitte in `st.secrets.toml` hinterlegen.")
     st.stop()
@@ -17,9 +17,9 @@ if "OPENAI_API_KEY" not in st.secrets:
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
-# **📌 Streamlit UI**
-st.title("🖥️ KI-gestützte End-to-End-Tests mit Playwright & Pytest")
-st.write("Gib eine Website-URL ein und wähle, was getestet werden soll:")
+# 📌 **Streamlit UI**
+st.title("🖥️ KI-gesteuerte End-to-End-Tests mit Playwright & Pytest")
+st.write("Gib eine Website-URL ein und wähle die zu testenden Kriterien:")
 
 # **Eingabefelder**
 url = st.text_input("🌍 Website-URL", "")
@@ -29,22 +29,19 @@ test_prompt = st.text_area("📝 Beschreibung der gewünschten Tests (optional)"
 st.subheader("🔍 Welche Aspekte sollen getestet werden?")
 test_options = {
     "check_links": st.checkbox("🔗 Funktionalität der Links"),
-    "check_images": st.checkbox("🖼️ Sind Bilder sichtbar?"),
-    "check_api": st.checkbox("🖥️ Funktionieren API-Aufrufe?"),
-    "check_forms": st.checkbox("📝 Funktionieren Formulareingaben?"),
-    "check_metadata": st.checkbox("📄 Sind Metadaten vorhanden?"),
+    "check_images": st.checkbox("🖼️ Funktionalität der Bilder"),
+    "check_search": st.checkbox("🔍 Funktioniert die Suchleiste?"),
+    "check_login": st.checkbox("🔑 Login-Funktion testen"),
+    "check_api": st.checkbox("🖥️ API & technische Schnittstellen"),
+    "check_metadata": st.checkbox("📄 Metadaten & Struktur"),
 }
 
-# **Code-Cleanup-Funktion**
+# **Funktion zur Code-Bereinigung**
 def clean_generated_code(code):
-    """Entfernt Markdown-Codeblöcke und gibt reinen Python-Code zurück."""
-    if code.startswith("```python"):
-        code = code.replace("```python", "").strip()
-    if code.endswith("```"):
-        code = code.replace("```", "").strip()
-    return code
+    """Entfernt Markdown-Codeblöcke und gibt nur den reinen Python-Code zurück."""
+    return code.replace("```python", "").replace("```", "").strip()
 
-# **Button zum Starten der Tests**
+# **Button zum Starten des Tests**
 if st.button("🚀 Test starten"):
     if not url:
         st.warning("⚠️ Bitte eine URL eingeben.")
@@ -53,12 +50,12 @@ if st.button("🚀 Test starten"):
         st.error("🚫 Ungültige URL! Bitte eine gültige Webadresse eingeben.")
         st.stop()
 
+    st.info(f"🔄 Starte Tests für {url} ...")
+
     selected_tests = [key for key, value in test_options.items() if value]
     if not selected_tests:
         st.warning("⚠️ Bitte mindestens einen Test auswählen.")
         st.stop()
-
-    st.info(f"🔄 Starte Tests für {url} ...")
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -70,15 +67,15 @@ if st.button("🚀 Test starten"):
             model="gpt-4-turbo",
             messages=[{
                 "role": "user",
-                "content": f"Schreibe vollständige Playwright-Pytest-Tests für: {test_prompt}. "
+                "content": f"Schreibe einen vollständigen Playwright-Pytest-Test für folgende Aufgabe: {test_prompt}. "
                            f"Die Tests sollen sich auf folgende Punkte beziehen: {', '.join(selected_tests)}. "
-                           "Gib NUR den Python-Code zurück, ohne Erklärungen oder Markdown-Formatierung."
+                           "Gib nur den Python-Code zurück, ohne Erklärungen oder Markdown-Formatierung."
             }],
-            max_tokens=1000
+            max_tokens=800
         )
 
         pytest_code = response.choices[0].message.content.strip()
-        pytest_code = clean_generated_code(pytest_code)  # Entfernt Markdown-Formatierung
+        pytest_code = clean_generated_code(pytest_code)  # Entferne Markdown-Formatierung
 
         # **Überprüfung auf gültigen Code**
         if "import" not in pytest_code or "def test_" not in pytest_code:
@@ -93,23 +90,26 @@ if st.button("🚀 Test starten"):
         st.subheader("📌 Generierter Playwright + Pytest Code:")
         st.code(pytest_code, language="python")
 
-        # **⚡ Pytest ausführen**
+        # **⚡ Pytest automatisch ausführen**
         try:
             result = subprocess.run(["pytest", test_file, "--disable-warnings"], capture_output=True, text=True)
             st.subheader("📊 Testergebnisse:")
-            st.text(result.stdout)  # Zeigt die Testergebnisse
+            st.text(result.stdout)  # Zeigt die Ergebnisse an
 
-            # **KI-generierte Zusammenfassung der Ergebnisse**
+            # **KI-Zusammenfassung der Ergebnisse**
             summary_response = client.chat.completions.create(
                 model="gpt-4-turbo",
                 messages=[{
                     "role": "user",
-                    "content": f"Erstelle eine zusammenfassende Bewertung basierend auf diesen Testergebnissen:\n\n{result.stdout}"
+                    "content": f"Erstelle eine klare Analyse basierend auf diesen Testergebnissen:\n\n{result.stdout}."
+                               "Gib an, welche Tests erfolgreich waren, welche fehlgeschlagen sind und warum."
+                               "Analysiere insbesondere, ob Probleme mit Bildern, Links oder APIs aufgetreten sind."
+                               "Falls Tests erfolgreich waren, erkläre kurz, warum."
                 }],
                 max_tokens=500
             )
             summary = summary_response.choices[0].message.content.strip()
-            st.subheader("📄 Zusammenfassung der Testergebnisse:")
+            st.subheader("📄 Automatische Analyse der Testergebnisse:")
             st.write(summary)
 
             if result.returncode == 0:
