@@ -1,50 +1,59 @@
-import streamlit as st
-from playwright.sync_api import sync_playwright
+import requests
 from bs4 import BeautifulSoup
+import streamlit as st
 
-def analyze_search_function(url):
-    """Untersucht die Suchfunktionen auf einer Webseite."""
+def check_search_function(url):
+    """Prüft, ob eine digitale Edition eine Suchfunktion hat."""
     
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        page.goto(url, timeout=15000, wait_until="domcontentloaded")
-        
-        # HTML der Seite abrufen
-        html = page.content()
-        soup = BeautifulSoup(html, "html.parser")
-        
-        # Alle Eingabefelder suchen
-        search_fields = soup.find_all("input", {"type": ["text", "search"]})
-        
-        results = []
-        for field in search_fields:
-            name = field.get("name", "Unbekannt")
-            placeholder = field.get("placeholder", "Kein Placeholder")
-            autocomplete = field.get("autocomplete", "Nicht angegeben")
-            
-            results.append({
-                "Name": name,
-                "Placeholder": placeholder,
-                "Autocomplete": autocomplete
-            })
-        
-        browser.close()
-        
-        return results
+    headers = {"User-Agent": "Mozilla/5.0"}
+    response = requests.get(url, headers=headers)
+
+    if response.status_code != 200:
+        return f"Fehler: Konnte die Seite nicht abrufen (Status {response.status_code})"
+    
+    soup = BeautifulSoup(response.text, "html.parser")
+    
+    search_score = 0  # Basisbewertung
+
+    results = {
+        "Suchfeld gefunden": False,
+        "Suchformular gefunden": False,
+        "Suchlink gefunden": False,
+        "Gesamtbewertung": 0
+    }
+
+    # **1️⃣ Direkte Eingabefelder für die Suche prüfen**
+    search_fields = soup.find_all("input", {"type": ["text", "search"]})
+    if search_fields:
+        results["Suchfeld gefunden"] = True
+        search_score += 2  # Wert für ein vorhandenes Suchfeld
+
+    # **2️⃣ Suchformular (`<form>`) prüfen**
+    search_forms = soup.find_all("form")
+    for form in search_forms:
+        if "search" in str(form).lower():
+            results["Suchformular gefunden"] = True
+            search_score += 2  # Wert für ein Formular
+
+    # **3️⃣ Suchlinks (`<a href="search.html">`) prüfen**
+    search_links = soup.find_all("a", href=True)
+    for link in search_links:
+        if "search" in link["href"].lower():
+            results["Suchlink gefunden"] = True
+            search_score += 1  # Geringerer Wert, weil es nur zu einer Suchseite führt
+
+    results["Gesamtbewertung"] = search_score
+
+    return results
 
 # **Streamlit UI**
-st.title("🔍 Website-Suchfunktion analysieren")
+st.title("🔍 Analyse der Suchfunktion einer digitalen Edition")
 url = st.text_input("🌍 Website-URL eingeben", "")
 
-if st.button("🔍 Suche analysieren"):
+if st.button("🔍 Analyse starten"):
     if not url:
         st.warning("⚠️ Bitte eine URL eingeben.")
     else:
-        search_results = analyze_search_function(url)
-        if search_results:
-            st.subheader("📌 Gefundene Suchfelder:")
-            for result in search_results:
-                st.write(f"- **Name:** {result['Name']}, **Placeholder:** {result['Placeholder']}, **Autocomplete:** {result['Autocomplete']}")
-        else:
-            st.write("❌ Keine Suchfelder gefunden.")
+        search_results = check_search_function(url)
+        st.subheader("📌 Suchfunktionsanalyse:")
+        st.json(search_results)
