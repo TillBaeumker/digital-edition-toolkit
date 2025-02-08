@@ -10,14 +10,16 @@ url = st.text_input("🔗 URL der digitalen Edition:")
 
 # Kriterien aus dem IDE-Katalog
 st.subheader("📌 Wähle die zu überprüfenden Kriterien:")
-check_search = st.checkbox("🔎 Suchfunktion")
-check_metadata = st.checkbox("📄 Metadaten (Dublin Core, TEI-Header)")
-check_citation = st.checkbox("📌 Zitierfähigkeit (DOI, Permalink)")
-check_access = st.checkbox("🗝️ Offener Zugang")
-check_api = st.checkbox("⚙️ Technische Schnittstellen (OAI-PMH, REST)")
-check_browsing = st.checkbox("📂 Browsing-Funktion")
-check_images = st.checkbox("🖼️ Bildanzeige & Zoom-Funktion")
-check_links = st.checkbox("🔗 Interne/externe Verlinkungen")
+criteria_checkboxes = {
+    "Suchfunktion": st.checkbox("🔎 Suchfunktion"),
+    "Metadaten": st.checkbox("📄 Metadaten (Dublin Core, TEI-Header)"),
+    "Zitierfähigkeit": st.checkbox("📌 Zitierfähigkeit (DOI, Permalink)"),
+    "Offener Zugang": st.checkbox("🗝️ Offener Zugang"),
+    "Technische Schnittstellen": st.checkbox("⚙️ Technische Schnittstellen (OAI-PMH, REST)"),
+    "Browsing-Funktion": st.checkbox("📂 Browsing-Funktion"),
+    "Bildanzeige & Zoom": st.checkbox("🖼️ Bildanzeige & Zoom-Funktion"),
+    "Verlinkungen": st.checkbox("🔗 Interne/externe Verlinkungen")
+}
 
 # Scraper-Modell für verschiedene Kriterien
 scraper = AutoScraper()
@@ -71,7 +73,7 @@ if st.button("🔍 Edition analysieren"):
 
             # AutoScraper einmal trainieren & für alle Kriterien nutzen
             for criterion, example in training_data.items():
-                if locals()[f"check_{criterion.lower().replace(' ', '_')}"]:
+                if criteria_checkboxes.get(criterion, False):  # Prüfen, ob die Checkbox aktiviert wurde
                     scraper.build(html_content, example)
                     scraper_results = scraper.get_result_similar(html_content)
                     results[criterion] = scraper_results[0] if scraper_results else "❌ Nicht gefunden"
