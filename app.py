@@ -2,30 +2,28 @@ import streamlit as st
 from playwright.sync_api import sync_playwright
 
 def check_search_playwright(url):
-    """Prüft mit Playwright, ob eine Website eine Suchfunktion hat und gibt das Ergebnis zurück."""
+    """Prüft mit Playwright, ob eine Website eine Suchfunktion hat."""
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
         page.goto(url, timeout=15000)
 
-        # Prüfen, ob ein Suchfeld existiert
         search_field = page.query_selector('input[type="search"], input[name*="search"], input[placeholder*="Suche"]')
 
         browser.close()
-        return search_field is not None  # Gibt True zurück, falls ein Suchfeld existiert
+        return search_field is not None  
 
 def check_images_playwright(url):
-    """Prüft mit Playwright, ob eine Website Bilder enthält und gibt die Anzahl zurück."""
+    """Prüft mit Playwright, ob eine Website Bilder enthält."""
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
         page.goto(url, timeout=15000)
 
-        # Alle Bilder auf der Seite finden
         images = page.query_selector_all("img")
 
         browser.close()
-        return len(images)  # Gibt die Anzahl der gefundenen Bilder zurück
+        return len(images)  
 
 # **Streamlit UI**
 st.title("🔍 Playwright-Analyse für digitale Editionen")
@@ -34,8 +32,8 @@ st.title("🔍 Playwright-Analyse für digitale Editionen")
 url = st.text_input("🌍 Website-URL eingeben", "")
 
 # **Checkboxen zur Auswahl der Prüfungen**
-check_search = st.checkbox("🔍 Nach Suchfunktion suchen")
-check_images = st.checkbox("🖼️ Nach Bildern suchen")
+check_search = st.checkbox("🔍 Nach Suchfunktion suchen", value=False)
+check_images = st.checkbox("🖼️ Nach Bildern suchen", value=False)
 
 # **Button zur Analyse**
 if st.button("🚀 Analyse starten"):
