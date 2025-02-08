@@ -1,67 +1,93 @@
 import streamlit as st
-from playwright.sync_api import sync_playwright
+import requests
+from autoscraper import AutoScraper
+from bs4 import BeautifulSoup
 
-def check_search_playwright(url):
-    """Prüft mit Playwright, ob eine Website eine Suchfunktion hat."""
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        page.goto(url, timeout=15000)
+st.title("🔍 AutoScraper Evaluierung digitaler Editionen")
 
-        search_field = page.query_selector('input[type="search"], input[name*="search"], input[placeholder*="Suche"]')
+# Eingabefeld für die URL der digitalen Edition
+url = st.text_input("🔗 URL der digitalen Edition:")
 
-        browser.close()
-        return search_field is not None  
+# Kriterien aus dem IDE-Katalog
+st.subheader("📌 Wähle die zu überprüfenden Kriterien:")
+check_search = st.checkbox("🔎 Suchfunktion")
+check_metadata = st.checkbox("📄 Metadaten (Dublin Core, TEI-Header)")
+check_citation = st.checkbox("📌 Zitierfähigkeit (DOI, Permalink)")
+check_access = st.checkbox("🗝️ Offener Zugang")
+check_api = st.checkbox("⚙️ Technische Schnittstellen (OAI-PMH, REST)")
+check_browsing = st.checkbox("📂 Browsing-Funktion")
+check_images = st.checkbox("🖼️ Bildanzeige & Zoom-Funktion")
+check_links = st.checkbox("🔗 Interne/externe Verlinkungen")
 
-def check_images_playwright(url):
-    """Prüft mit Playwright, ob eine Website Bilder enthält."""
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        page.goto(url, timeout=15000)
+# Scraper-Modell für verschiedene Kriterien
+scraper = AutoScraper()
 
-        images = page.query_selector_all("img")
+# Trainingsdaten für AutoScraper definieren
+search_example = ["Suchfeld gefunden"]
+metadata_example = ["Metadaten vorhanden"]
+citation_example = ["DOI gefunden"]
+access_example = ["Frei zugänglich"]
+api_example = ["API vorhanden"]
+browsing_example = ["Browsing-Funktion gefunden"]
+images_example = ["Zoom-Funktion vorhanden"]
+links_example = ["50 Links gefunden"]
 
-        browser.close()
-        return len(images)  
-
-# **Streamlit UI**
-st.title("🔍 Playwright-Analyse für digitale Editionen")
-
-# **URL-Eingabe**
-url = st.text_input("🌍 Website-URL eingeben", "")
-
-# **Checkboxen zur Auswahl der Prüfungen**
-check_search = st.checkbox("🔍 Nach Suchfunktion suchen", value=False)
-check_images = st.checkbox("🖼️ Nach Bildern suchen", value=False)
-
-# **Button zur Analyse**
-if st.button("🚀 Analyse starten"):
+if st.button("🔍 Edition analysieren"):
     if not url:
-        st.warning("⚠️ Bitte eine URL eingeben.")
-    elif not check_search and not check_images:
-        st.warning("⚠️ Bitte mindestens eine Option auswählen.")
+        st.error("Bitte eine URL eingeben!")
     else:
-        st.info(f"🔄 Überprüfe {url} mit Playwright...")
-
         try:
-            # **Ergebnisse initialisieren**
+            response = requests.get(url)
+            soup = BeautifulSoup(response.text, "lxml")
+
+            # Ergebnisse speichern
             results = {}
 
-            # **Suchfunktion prüfen**
+            # AutoScraper trainieren & anwenden
             if check_search:
-                has_search = check_search_playwright(url)
-                results["Suchfunktion"] = "✅ Vorhanden" if has_search else "❌ Nicht gefunden"
+                scraper.build(response.text, search_example)
+                search_results = scraper.get_result_similar(response.text)
+                results["Suchfunktion"] = search_results[0] if search_results else "❌ Nicht gefunden"
 
-            # **Bilder prüfen**
+            if check_metadata:
+                scraper.build(response.text, metadata_example)
+                metadata_results = scraper.get_result_similar(response.text)
+                results["Metadaten"] = metadata_results[0] if metadata_results else "❌ Keine Metadaten"
+
+            if check_citation:
+                scraper.build(response.text, citation_example)
+                citation_results = scraper.get_result_similar(response.text)
+                results["Zitierfähigkeit"] = citation_results[0] if citation_results else "❌ Kein DOI"
+
+            if check_access:
+                scraper.build(response.text, access_example)
+                access_results = scraper.get_result_similar(response.text)
+                results["Offener Zugang"] = access_results[0] if access_results else "❌ Zugangsbeschränkt"
+
+            if check_api:
+                scraper.build(response.text, api_example)
+                api_results = scraper.get_result_similar(response.text)
+                results["Technische Schnittstellen"] = api_results[0] if api_results else "❌ Keine API gefunden"
+
+            if check_browsing:
+                scraper.build(response.text, browsing_example)
+                browsing_results = scraper.get_result_similar(response.text)
+                results["Browsing-Funktion"] = browsing_results[0] if browsing_results else "❌ Keine Navigation"
+
             if check_images:
-                image_count = check_images_playwright(url)
-                results["Bilder"] = f"🖼️ {image_count} Bild(er) gefunden" if image_count > 0 else "❌ Keine Bilder gefunden"
+                scraper.build(response.text, images_example)
+                images_results = scraper.get_result_similar(response.text)
+                results["Bildanzeige & Zoom"] = images_results[0] if images_results else "❌ Kein Zoom"
 
-            # **Ergebnisse anzeigen**
-            st.success("✅ Analyse abgeschlossen!")
+            if check_links:
+                scraper.build(response.text, links_example)
+                links_results = scraper.get_result_similar(response.text)
+                results["Verlinkungen"] = links_results[0] if links_results else "❌ Keine Links gefunden"
+
+            # Ergebnisse ausgeben
+            st.subheader("📊 Ergebnisse der Analyse")
             for key, value in results.items():
-                st.write(f"**{key}:** {value}")
+                st.write(f"✅ {key}: {value}")
 
         except Exception as e:
-            st.error(f"⚠️ Fehler bei der Analyse: {str(e)}")
+            st.error(f"Fehler bei der Analyse: {e}")
