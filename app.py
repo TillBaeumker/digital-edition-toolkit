@@ -1,14 +1,26 @@
 import streamlit as st
+import os
+import subprocess
+
+# 🔧 Sicherstellen, dass lxml installiert ist
+try:
+    import lxml
+except ImportError:
+    st.warning("🔄 lxml nicht gefunden. Installiere jetzt...")
+    subprocess.run(["pip", "install", "lxml"], check=True)
+    st.success("✅ lxml erfolgreich installiert! Bitte starte die App neu.")
+
+# Jetzt können die restlichen Bibliotheken importiert werden
 import requests
 from autoscraper import AutoScraper
 from bs4 import BeautifulSoup
 
 st.title("🔍 AutoScraper Evaluierung digitaler Editionen")
 
-# Eingabefeld für die URL der digitalen Edition
+# 📝 Eingabefeld für die URL der digitalen Edition
 url = st.text_input("🔗 URL der digitalen Edition:")
 
-# Kriterien aus dem IDE-Katalog
+# 📌 Kriterien aus dem IDE-Katalog
 st.subheader("📌 Wähle die zu überprüfenden Kriterien:")
 check_search = st.checkbox("🔎 Suchfunktion")
 check_metadata = st.checkbox("📄 Metadaten (Dublin Core, TEI-Header)")
@@ -19,10 +31,10 @@ check_browsing = st.checkbox("📂 Browsing-Funktion")
 check_images = st.checkbox("🖼️ Bildanzeige & Zoom-Funktion")
 check_links = st.checkbox("🔗 Interne/externe Verlinkungen")
 
-# Scraper-Modell für verschiedene Kriterien
+# 📊 Scraper-Modell für verschiedene Kriterien
 scraper = AutoScraper()
 
-# Trainingsdaten für AutoScraper definieren
+# 🏗️ Trainingsdaten für AutoScraper definieren
 search_example = ["Suchfeld gefunden"]
 metadata_example = ["Metadaten vorhanden"]
 citation_example = ["DOI gefunden"]
@@ -38,12 +50,12 @@ if st.button("🔍 Edition analysieren"):
     else:
         try:
             response = requests.get(url)
-            soup = BeautifulSoup(response.text, "lxml")
+            soup = BeautifulSoup(response.text, "lxml")  # Prüft, ob lxml funktioniert
 
             # Ergebnisse speichern
             results = {}
 
-            # AutoScraper trainieren & anwenden
+            # 📌 AutoScraper trainieren & anwenden
             if check_search:
                 scraper.build(response.text, search_example)
                 search_results = scraper.get_result_similar(response.text)
@@ -84,10 +96,10 @@ if st.button("🔍 Edition analysieren"):
                 links_results = scraper.get_result_similar(response.text)
                 results["Verlinkungen"] = links_results[0] if links_results else "❌ Keine Links gefunden"
 
-            # Ergebnisse ausgeben
+            # 📊 Ergebnisse ausgeben
             st.subheader("📊 Ergebnisse der Analyse")
             for key, value in results.items():
                 st.write(f"✅ {key}: {value}")
 
         except Exception as e:
-            st.error(f"Fehler bei der Analyse: {e}")
+            st.error(f"❌ Fehler bei der Analyse: {e}")
