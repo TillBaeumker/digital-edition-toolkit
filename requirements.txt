@@ -1,9 +1,5 @@
 streamlit
-openai
-playwright
-pytest
-pytest-playwright
-python-dotenv
-validators
+autoscraper
 beautifulsoup4
-
+requests
+lxml
