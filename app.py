@@ -1,84 +1,89 @@
 import streamlit as st
-import httpx  # Besser als requests für Scraping
-from autoscraper import AutoScraper
-from bs4 import BeautifulSoup
+from playwright.sync_api import sync_playwright
 
-st.title("🔍 AutoScraper Evaluierung digitaler Editionen")
+# Funktion zum Laden der Seite mit Playwright
+def load_page(url):
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        try:
+            page.goto(url, timeout=15000)  # 15 Sekunden Timeout
+            return page
+        except Exception as e:
+            st.error(f"❌ Fehler beim Laden der Seite: {e}")
+            return None
+        finally:
+            browser.close()
 
-# Eingabe der URL durch den Nutzer
-url = st.text_input("🔗 URL der digitalen Edition:")
+# Prüft, ob eine Suchfunktion vorhanden ist
+def check_search_function(page):
+    search_field = page.query_selector('input[type="search"], input[name*="search"], input[placeholder*="Suche"]')
+    return search_field is not None
 
-# Kriterien aus dem IDE-Katalog
-st.subheader("📌 Wähle die zu überprüfenden Kriterien:")
-criteria_checkboxes = {
-    "Suchfunktion": st.checkbox("🔎 Suchfunktion"),
-    "Metadaten": st.checkbox("📄 Metadaten (Dublin Core, TEI-Header)"),
-    "Zitierfähigkeit": st.checkbox("📌 Zitierfähigkeit (DOI, Permalink)"),
-    "Offener Zugang": st.checkbox("🗝️ Offener Zugang"),
-    "Technische Schnittstellen": st.checkbox("⚙️ Technische Schnittstellen (OAI-PMH, REST)"),
-    "Browsing-Funktion": st.checkbox("📂 Browsing-Funktion"),
-    "Bildanzeige & Zoom": st.checkbox("🖼️ Bildanzeige & Zoom-Funktion"),
-    "Verlinkungen": st.checkbox("🔗 Interne/externe Verlinkungen")
-}
+# Prüft, ob Bilder vorhanden sind
+def check_images(page):
+    images = page.query_selector_all("img")
+    return len(images)
 
-# Scraper-Modell für verschiedene Kriterien
-scraper = AutoScraper()
+# Prüft, ob Metadaten (TEI, Dublin Core) vorhanden sind
+def check_metadata(page):
+    tei_meta = page.query_selector("teiHeader, metadata, meta[name*='DC']")
+    return tei_meta is not None
 
-# Trainingsdaten für AutoScraper definieren
-training_data = {
-    "Suchfunktion": ["Suchfeld gefunden"],
-    "Metadaten": ["Metadaten vorhanden"],
-    "Zitierfähigkeit": ["DOI gefunden"],
-    "Offener Zugang": ["Frei zugänglich"],
-    "Technische Schnittstellen": ["API vorhanden"],
-    "Browsing-Funktion": ["Browsing-Funktion gefunden"],
-    "Bildanzeige & Zoom": ["Zoom-Funktion vorhanden"],
-    "Verlinkungen": ["50 Links gefunden"]
-}
+# Prüft, wie viele Links auf der Seite vorhanden sind
+def check_links(page):
+    links = page.query_selector_all("a")
+    return len(links)
 
-def fetch_website(url):
-    """ Holt den HTML-Inhalt der Webseite mit httpx """
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-    }
-    try:
-        with httpx.Client(follow_redirects=True, timeout=10) as client:
-            response = client.get(url, headers=headers)
-            response.raise_for_status()
-            return response.text, response.headers.get("Content-Type", "").lower()
-    except httpx.RequestError as e:
-        return None, f"❌ Netzwerkfehler: {e}"
-    except httpx.HTTPStatusError as e:
-        return None, f"❌ Fehler {e.response.status_code}: {e.response.text}"
+# **Streamlit UI**
+st.title("🔍 Playwright-Analyse für digitale Editionen")
 
-if st.button("🔍 Edition analysieren"):
+# **URL-Eingabe**
+url = st.text_input("🌍 Website-URL eingeben", "")
+
+# **Checkboxen zur Auswahl der Prüfungen**
+check_search = st.checkbox("🔍 Nach Suchfunktion suchen", value=False)
+check_images = st.checkbox("🖼️ Nach Bildern suchen", value=False)
+check_metadata = st.checkbox("📄 Nach Metadaten (TEI, Dublin Core) suchen", value=False)
+check_links = st.checkbox("🔗 Anzahl der Links prüfen", value=False)
+
+# **Button zur Analyse**
+if st.button("🚀 Analyse starten"):
     if not url:
-        st.error("❌ Fehler: Bitte eine gültige URL eingeben!")
-    elif not url.startswith("http"):
-        st.error("❌ Fehler: Die URL muss mit 'http://' oder 'https://' beginnen.")
+        st.warning("⚠️ Bitte eine URL eingeben.")
+    elif not any([check_search, check_images, check_metadata, check_links]):
+        st.warning("⚠️ Bitte mindestens eine Option auswählen.")
     else:
-        html_content, content_type = fetch_website(url)
+        st.info(f"🔄 Lade {url} mit Playwright...")
 
-        if not html_content:
-            st.error(content_type)  # Gibt die Netzwerk-Fehlermeldung aus
+        # **Lade die Seite mit Playwright**
+        page = load_page(url)
+        if page is None:
+            st.error("⚠️ Fehler: Konnte die Seite nicht laden.")
         else:
-            # Bestimmen, ob HTML oder XML
-            if "xml" in content_type:
-                soup = BeautifulSoup(html_content, "xml")  # XML-Parser
-            else:
-                soup = BeautifulSoup(html_content, "html.parser")  # HTML-Parser
-
-            # Ergebnisse speichern
             results = {}
 
-            # AutoScraper einmal trainieren & für alle Kriterien nutzen
-            for criterion, example in training_data.items():
-                if criteria_checkboxes.get(criterion, False):  # Prüfen, ob die Checkbox aktiviert wurde
-                    scraper.build(html_content, example)
-                    scraper_results = scraper.get_result_similar(html_content)
-                    results[criterion] = scraper_results[0] if scraper_results else "❌ Nicht gefunden"
+            # **Suchfunktion prüfen**
+            if check_search:
+                has_search = check_search_function(page)
+                results["Suchfunktion"] = "✅ Vorhanden" if has_search else "❌ Nicht gefunden"
 
-            # Ergebnisse ausgeben
-            st.subheader("📊 Ergebnisse der Analyse")
+            # **Bilder prüfen**
+            if check_images:
+                image_count = check_images(page)
+                results["Bilder"] = f"🖼️ {image_count} Bild(er) gefunden" if image_count > 0 else "❌ Keine Bilder gefunden"
+
+            # **Metadaten prüfen**
+            if check_metadata:
+                has_metadata = check_metadata(page)
+                results["Metadaten"] = "✅ Vorhanden" if has_metadata else "❌ Keine Metadaten gefunden"
+
+            # **Anzahl der Links prüfen**
+            if check_links:
+                link_count = check_links(page)
+                results["Verlinkungen"] = f"🔗 {link_count} Link(s) gefunden"
+
+            # **Ergebnisse anzeigen**
+            st.success("✅ Analyse abgeschlossen!")
             for key, value in results.items():
-                st.write(f"✅ {key}: {value}")
+                st.write(f"**{key}:** {value}")
