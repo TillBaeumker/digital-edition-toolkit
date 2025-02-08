@@ -1,5 +1,5 @@
 import streamlit as st
-import requests
+import httpx  # Besser als requests für Scraping
 from autoscraper import AutoScraper
 from bs4 import BeautifulSoup
 
@@ -23,80 +23,60 @@ check_links = st.checkbox("🔗 Interne/externe Verlinkungen")
 scraper = AutoScraper()
 
 # Trainingsdaten für AutoScraper definieren
-search_example = ["Suchfeld gefunden"]
-metadata_example = ["Metadaten vorhanden"]
-citation_example = ["DOI gefunden"]
-access_example = ["Frei zugänglich"]
-api_example = ["API vorhanden"]
-browsing_example = ["Browsing-Funktion gefunden"]
-images_example = ["Zoom-Funktion vorhanden"]
-links_example = ["50 Links gefunden"]
+training_data = {
+    "Suchfunktion": ["Suchfeld gefunden"],
+    "Metadaten": ["Metadaten vorhanden"],
+    "Zitierfähigkeit": ["DOI gefunden"],
+    "Offener Zugang": ["Frei zugänglich"],
+    "Technische Schnittstellen": ["API vorhanden"],
+    "Browsing-Funktion": ["Browsing-Funktion gefunden"],
+    "Bildanzeige & Zoom": ["Zoom-Funktion vorhanden"],
+    "Verlinkungen": ["50 Links gefunden"]
+}
+
+def fetch_website(url):
+    """ Holt den HTML-Inhalt der Webseite mit httpx """
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+    try:
+        with httpx.Client(follow_redirects=True, timeout=10) as client:
+            response = client.get(url, headers=headers)
+            response.raise_for_status()
+            return response.text, response.headers.get("Content-Type", "").lower()
+    except httpx.RequestError as e:
+        return None, f"❌ Netzwerkfehler: {e}"
+    except httpx.HTTPStatusError as e:
+        return None, f"❌ Fehler {e.response.status_code}: {e.response.text}"
 
 if st.button("🔍 Edition analysieren"):
     if not url:
         st.error("❌ Fehler: Bitte eine gültige URL eingeben!")
     elif not url.startswith("http"):
-        st.error("❌ Fehler: Die eingegebene URL ist ungültig. Stelle sicher, dass sie mit 'http://' oder 'https://' beginnt.")
+        st.error("❌ Fehler: Die URL muss mit 'http://' oder 'https://' beginnen.")
     else:
-        try:
-            response = requests.get(url, timeout=10)
-            response.raise_for_status()  # Falls Seite nicht erreichbar
+        html_content, content_type = fetch_website(url)
 
+        if not html_content:
+            st.error(content_type)  # Gibt die Netzwerk-Fehlermeldung aus
+        else:
             # Bestimmen, ob HTML oder XML
-            content_type = response.headers.get("Content-Type", "").lower()
             if "xml" in content_type:
-                soup = BeautifulSoup(response.text, "xml")  # XML-Parser
+                soup = BeautifulSoup(html_content, "xml")  # XML-Parser
             else:
-                soup = BeautifulSoup(response.text, "html.parser")  # HTML-Parser
+                soup = BeautifulSoup(html_content, "html.parser")  # HTML-Parser
 
             # Ergebnisse speichern
             results = {}
 
-            # AutoScraper trainieren & anwenden
-            if check_search:
-                scraper.build(response.text, search_example)
-                search_results = scraper.get_result_similar(response.text)
-                results["Suchfunktion"] = search_results[0] if search_results else "❌ Nicht gefunden"
-
-            if check_metadata:
-                scraper.build(response.text, metadata_example)
-                metadata_results = scraper.get_result_similar(response.text)
-                results["Metadaten"] = metadata_results[0] if metadata_results else "❌ Keine Metadaten"
-
-            if check_citation:
-                scraper.build(response.text, citation_example)
-                citation_results = scraper.get_result_similar(response.text)
-                results["Zitierfähigkeit"] = citation_results[0] if citation_results else "❌ Kein DOI"
-
-            if check_access:
-                scraper.build(response.text, access_example)
-                access_results = scraper.get_result_similar(response.text)
-                results["Offener Zugang"] = access_results[0] if access_results else "❌ Zugangsbeschränkt"
-
-            if check_api:
-                scraper.build(response.text, api_example)
-                api_results = scraper.get_result_similar(response.text)
-                results["Technische Schnittstellen"] = api_results[0] if api_results else "❌ Keine API gefunden"
-
-            if check_browsing:
-                scraper.build(response.text, browsing_example)
-                browsing_results = scraper.get_result_similar(response.text)
-                results["Browsing-Funktion"] = browsing_results[0] if browsing_results else "❌ Keine Navigation"
-
-            if check_images:
-                scraper.build(response.text, images_example)
-                images_results = scraper.get_result_similar(response.text)
-                results["Bildanzeige & Zoom"] = images_results[0] if images_results else "❌ Kein Zoom"
-
-            if check_links:
-                scraper.build(response.text, links_example)
-                links_results = scraper.get_result_similar(response.text)
-                results["Verlinkungen"] = links_results[0] if links_results else "❌ Keine Links gefunden"
+            # AutoScraper einmal trainieren & für alle Kriterien nutzen
+            for criterion, example in training_data.items():
+                if locals()[f"check_{criterion.lower().replace(' ', '_')}"]:
+                    scraper.build(html_content, example)
+                    scraper_results = scraper.get_result_similar(html_content)
+                    results[criterion] = scraper_results[0] if scraper_results else "❌ Nicht gefunden"
 
             # Ergebnisse ausgeben
             st.subheader("📊 Ergebnisse der Analyse")
             for key, value in results.items():
                 st.write(f"✅ {key}: {value}")
-
-        except requests.exceptions.RequestException as e:
-            st.error(f"❌ Fehler beim Laden der Seite: {e}")
