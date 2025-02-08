@@ -1,5 +1,5 @@
 streamlit
 autoscraper
 beautifulsoup4
-requests
 lxml
+requests
