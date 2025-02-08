@@ -1,16 +1,12 @@
-import streamlit as st
 import os
 import subprocess
 
-# 🔧 Sicherstellen, dass lxml installiert ist
 try:
     import lxml
 except ImportError:
-    st.warning("🔄 lxml nicht gefunden. Installiere jetzt...")
     subprocess.run(["pip", "install", "lxml"], check=True)
-    st.success("✅ lxml erfolgreich installiert! Bitte starte die App neu.")
 
-# Jetzt können die restlichen Bibliotheken importiert werden
+import streamlit as st
 import requests
 from autoscraper import AutoScraper
 from bs4 import BeautifulSoup
